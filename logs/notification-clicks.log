@@ -1,0 +1,70 @@
+2026-03-23T11:13:04.2880377-07:00 notification clicked project=windows-notify-codex cwd=c:\Users\lemondoo\PROJECTS\windows-notify-codex
+2026-03-23T11:13:04.5450344-07:00 focus failed: no VS Code window candidates found
+2026-03-23T11:14:07.8325838-07:00 notification clicked project=windows-notify-codex cwd=c:\Users\lemondoo\PROJECTS\windows-notify-codex
+2026-03-23T11:14:08.0805843-07:00 focus failed: no VS Code window candidates found
+2026-03-23T11:15:31.4319949-07:00 notification clicked project=windows-notify-codex cwd=c:\Users\lemondoo\PROJECTS\windows-notify-codex
+2026-03-23T11:15:31.6679970-07:00 process candidate pid=106188 score=7 title=notification-clicks.log - windows-notify-codex - Visual Studio Code
+2026-03-23T11:15:31.7529971-07:00 focus target source=GetProcess pid=106188 score=7 title=notification-clicks.log - windows-notify-codex - Visual Studio Code
+2026-03-23T11:15:31.7799974-07:00 AppActivate returned True
+2026-03-23T11:15:31.8539954-07:00 SendKeys Alt dispatched
+2026-03-23T11:15:31.9289975-07:00 ShowWindowAsync returned True
+2026-03-23T11:15:31.9299970-07:00 SetForegroundWindow returned True
+2026-03-23T11:16:54.5544528-07:00 notification clicked project=windows-notify-codex cwd=c:\Users\lemondoo\PROJECTS\windows-notify-codex
+2026-03-23T11:16:54.7874519-07:00 process candidate pid=106188 score=7 title=notification-clicks.log - windows-notify-codex - Visual Studio Code
+2026-03-23T11:16:54.8794534-07:00 focus target source=GetProcess pid=106188 score=7 title=notification-clicks.log - windows-notify-codex - Visual Studio Code
+2026-03-23T11:16:54.8974521-07:00 AppActivate returned True
+2026-03-23T11:16:54.9524543-07:00 SendKeys Alt dispatched
+2026-03-23T11:16:55.0144519-07:00 ShowWindowAsync returned True
+2026-03-23T11:16:55.0164513-07:00 SetForegroundWindow returned True
+2026-03-23T11:17:50.9928316-07:00 notification clicked project=rocket-game cwd=c:\Users\lemondoo\PROJECTS\rocket-game
+2026-03-23T11:17:51.2258314-07:00 process candidate pid=106188 score=7 title=UnitLocal.lua - rocket-game - Visual Studio Code
+2026-03-23T11:17:51.3038299-07:00 focus target source=GetProcess pid=106188 score=7 title=UnitLocal.lua - rocket-game - Visual Studio Code
+2026-03-23T11:17:51.3168300-07:00 AppActivate returned True
+2026-03-23T11:17:51.3768299-07:00 SendKeys Alt dispatched
+2026-03-23T11:17:51.4458323-07:00 window state minimized=False maximized=True
+2026-03-23T11:17:51.4478304-07:00 SetForegroundWindow returned True
+2026-03-23T11:18:17.9999388-07:00 notification clicked project=windows-notify-codex cwd=c:\Users\lemondoo\PROJECTS\windows-notify-codex
+2026-03-23T11:18:18.2279398-07:00 process candidate pid=106188 score=1 title=UnitLocal.lua - rocket-game - Visual Studio Code
+2026-03-23T11:18:18.3089405-07:00 focus target source=GetProcess pid=106188 score=1 title=UnitLocal.lua - rocket-game - Visual Studio Code
+2026-03-23T11:18:18.3239385-07:00 AppActivate returned True
+2026-03-23T11:18:18.3890406-07:00 SendKeys Alt dispatched
+2026-03-23T11:18:18.4500363-07:00 window state before focus minimized=False maximized=True
+2026-03-23T11:18:18.4530377-07:00 ShowWindowAsync maximize returned True
+2026-03-23T11:18:18.4540387-07:00 SetForegroundWindow returned True
+2026-03-23T11:18:18.5460357-07:00 window state after focus minimized=False maximized=True
+2026-03-23T11:18:41.5645165-07:00 notification clicked project=windows-notify-codex cwd=c:\Users\lemondoo\PROJECTS\windows-notify-codex
+2026-03-23T11:18:41.7855168-07:00 process candidate pid=106188 score=1 title=UnitLocal.lua - rocket-game - Visual Studio Code
+2026-03-23T11:18:41.8655166-07:00 focus target source=GetProcess pid=106188 score=1 title=UnitLocal.lua - rocket-game - Visual Studio Code
+2026-03-23T11:18:41.8795160-07:00 AppActivate returned True
+2026-03-23T11:18:41.9365161-07:00 SendKeys Alt dispatched
+2026-03-23T11:18:41.9975152-07:00 window state before focus minimized=False maximized=True
+2026-03-23T11:18:42.0005167-07:00 ShowWindowAsync maximize returned True
+2026-03-23T11:18:42.0015168-07:00 SetForegroundWindow returned True
+2026-03-23T11:18:42.0863923-07:00 window state after focus minimized=False maximized=True
+2026-03-23T11:19:13.2362781-07:00 notification clicked project=windows-notify-codex cwd=c:\Users\lemondoo\PROJECTS\windows-notify-codex
+2026-03-23T11:19:13.4632800-07:00 process candidate pid=106188 score=7 title=notification-clicks.log - windows-notify-codex - Visual Studio Code
+2026-03-23T11:19:13.5422799-07:00 focus target source=GetProcess pid=106188 score=7 title=notification-clicks.log - windows-notify-codex - Visual Studio Code
+2026-03-23T11:19:13.5592783-07:00 AppActivate returned True
+2026-03-23T11:19:13.6312785-07:00 SendKeys Alt dispatched
+2026-03-23T11:19:13.7082776-07:00 window state before focus minimized=False maximized=True
+2026-03-23T11:19:13.7122799-07:00 ShowWindowAsync maximize returned True
+2026-03-23T11:19:13.7132808-07:00 SetForegroundWindow returned True
+2026-03-23T11:19:13.8082776-07:00 window state after focus minimized=False maximized=True
+2026-03-23T11:19:47.1611874-07:00 notification clicked project=windows-notify-codex cwd=c:\Users\lemondoo\PROJECTS\windows-notify-codex
+2026-03-23T11:19:47.3791879-07:00 process candidate pid=106188 score=7 title=notification-clicks.log - windows-notify-codex - Visual Studio Code
+2026-03-23T11:19:47.4571879-07:00 focus target source=GetProcess pid=106188 score=7 title=notification-clicks.log - windows-notify-codex - Visual Studio Code
+2026-03-23T11:19:47.4711856-07:00 AppActivate returned True
+2026-03-23T11:19:47.5291864-07:00 SendKeys Alt dispatched
+2026-03-23T11:19:47.5891859-07:00 window state before focus minimized=False maximized=True
+2026-03-23T11:19:47.5921879-07:00 ShowWindowAsync maximize returned True
+2026-03-23T11:19:47.5931878-07:00 SetForegroundWindow returned True
+2026-03-23T11:19:47.6831855-07:00 window state after focus minimized=False maximized=True
+2026-03-23T11:20:22.0066076-07:00 notification clicked project=rocket-game cwd=c:\Users\lemondoo\PROJECTS\rocket-game
+2026-03-23T11:20:22.2206066-07:00 process candidate pid=106188 score=1 title=notification-clicks.log - windows-notify-codex - Visual Studio Code
+2026-03-23T11:20:22.3026075-07:00 focus target source=GetProcess pid=106188 score=1 title=notification-clicks.log - windows-notify-codex - Visual Studio Code
+2026-03-23T11:20:22.3166071-07:00 AppActivate returned True
+2026-03-23T11:20:22.3756080-07:00 SendKeys Alt dispatched
+2026-03-23T11:20:22.4336074-07:00 window state before focus minimized=False maximized=True
+2026-03-23T11:20:22.4366077-07:00 ShowWindowAsync maximize returned True
+2026-03-23T11:20:22.4386083-07:00 SetForegroundWindow returned True
+2026-03-23T11:20:22.5276059-07:00 window state after focus minimized=False maximized=True

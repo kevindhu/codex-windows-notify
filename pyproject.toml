@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "windows-notify-codex"
+version = "0.1.0"
+description = "Notify on Codex VS Code task completion when VS Code is unfocused."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "OpenAI Codex" }
+]
+
+[project.scripts]
+codex-notify = "windows_notify_codex.__main__:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
