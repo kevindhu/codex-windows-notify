@@ -40,7 +40,7 @@ function Get-PreferredPythonw {
     throw "pythonw.exe not found for repo root: $RepoRoot"
 }
 
-$repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repoRoot = Split-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) -Parent
 $startupDir = [Environment]::GetFolderPath("Startup")
 $startupLauncher = Join-Path $startupDir "CodexNotifier.cmd"
 $legacyShortcut = Join-Path $startupDir "CodexNotifier.lnk"

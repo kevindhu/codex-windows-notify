@@ -5,7 +5,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$repoRoot = Split-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) -Parent
 $inputFullPath = Join-Path $repoRoot $InputPath
 $outputFullPath = Join-Path $repoRoot $OutputPath
 

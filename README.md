@@ -26,7 +26,7 @@ python .\codex_notify.py
 For local debugging in a visible terminal:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\run_notifier_debug.ps1
+powershell -ExecutionPolicy Bypass -File .\commands\run\run_notifier_debug.ps1
 ```
 
 That runs the watcher in the foreground with `--verbose` and appends terminal output to `.\logs\manual-debug.log`.
@@ -34,7 +34,7 @@ That runs the watcher in the foreground with `--verbose` and appends terminal ou
 To manually start the hidden/background version from your own terminal session:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\run_notifier_background.ps1
+powershell -ExecutionPolicy Bypass -File .\commands\run\run_notifier_background.ps1
 ```
 
 That uses the Python 3.11 `pythonw.exe` install on your machine when available, which makes it easier to compare foreground vs background behavior.
@@ -91,7 +91,7 @@ The `--completion-sound` and `--prompt-sound` options are fallback system sounds
 Convert the bundled MP3 to WAV with:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\convert_sound.ps1
+powershell -ExecutionPolicy Bypass -File .\commands\misc\convert_sound.ps1
 ```
 
 ## Notes
@@ -104,7 +104,7 @@ powershell -ExecutionPolicy Bypass -File .\convert_sound.ps1
 If you prefer the Windows Startup folder instead of Task Scheduler, use:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install_startup_folder.ps1
+powershell -ExecutionPolicy Bypass -File .\commands\misc\install_startup_folder.ps1
 ```
 
 That creates a `CodexNotifier.cmd` launcher in your user Startup folder that starts the working `pythonw.exe` for [codex_notify.py](c:/Users/lemondoo/PROJECTS/windows-notify-codex/codex_notify.py), so the notifier launches automatically at sign-in without going through Windows Script Host.
@@ -112,5 +112,5 @@ That creates a `CodexNotifier.cmd` launcher in your user Startup folder that sta
 Remove it later with:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\uninstall_startup_folder.ps1
+powershell -ExecutionPolicy Bypass -File .\commands\misc\uninstall_startup_folder.ps1
 ```
