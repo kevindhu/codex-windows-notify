@@ -2,7 +2,7 @@
 
 This is a tiny background watcher for Codex in VS Code on Windows.
 
-It watches the local Codex rollout logs under `~/.codex/sessions`, looks for real `task_complete` events from `source: "vscode"`, checks whether VS Code is focused, and shows a toast-style Windows popup when a task finishes while VS Code is unfocused.
+It watches the local Codex rollout logs under `~/.codex/sessions`, looks for real `task_complete` events from `source: "vscode"`, and shows a toast-style Windows popup when a task finishes.
 
 It also writes a structured completion log so you can review what finished, when it finished, which project it belonged to, and whether a notification was shown.
 
@@ -37,13 +37,7 @@ To manually start the hidden/background version from your own terminal session:
 powershell -ExecutionPolicy Bypass -File .\run_notifier_background.ps1
 ```
 
-That uses the `pythonw.exe` next to whatever `python` resolves to on your machine, which makes it easier to compare foreground vs background behavior.
-
-Run it without a console window:
-
-```powershell
-wscript.exe .\run_codex_notifier_hidden.vbs
-```
+That uses the Python 3.11 `pythonw.exe` install on your machine when available, which makes it easier to compare foreground vs background behavior.
 
 Or install it in editable mode and use the console script:
 
@@ -58,7 +52,7 @@ codex-notify
 - Existing historical sessions are indexed on startup but are not backfilled into the completion log.
 - New `task_complete` events from VS Code sessions do notify.
 - New `task_complete` events are appended to `./logs/codex-completions.jsonl` by default.
-- Notifications are skipped while the foreground app is `Code.exe` or `Code - Insiders.exe`.
+- Notifications are shown even if VS Code is focused.
 - The notification body uses the last agent message when available.
 - Notifications use `.\sounds\smallnotify.wav` by default when that file exists.
 
@@ -104,40 +98,6 @@ powershell -ExecutionPolicy Bypass -File .\convert_sound.ps1
 
 - The watcher polls once per second.
 - Notifications are shown through PowerShell using a silent toast-style popup window, so Windows does not add its own default notification sound on top of your custom one.
-
-## Always On
-
-The easiest reliable setup on Windows 10 is Task Scheduler.
-
-Install the scheduled task:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\install_startup_task.ps1
-```
-
-That creates a per-user task named `Codex VS Code Notifier`, starts it immediately, and runs it again automatically every time you sign in.
-
-Remove it later with:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\uninstall_startup_task.ps1
-```
-
-Useful checks:
-
-```powershell
-Get-ScheduledTask -TaskName "Codex VS Code Notifier"
-Get-ScheduledTaskInfo -TaskName "Codex VS Code Notifier"
-```
-
-Scheduler logs go to:
-
-- `.\logs\scheduler-stdout.log`
-- `.\logs\scheduler-stderr.log`
-
-Completion events still go to:
-
-- `.\logs\codex-completions.jsonl`
 
 ## Startup Folder
 
