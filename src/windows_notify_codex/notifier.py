@@ -89,6 +89,8 @@ def show_windows_notification(
     script = r"""
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
 $wshell = New-Object -ComObject WScript.Shell
 $title = $env:CODEX_NOTIFY_TITLE
 $message = $env:CODEX_NOTIFY_MESSAGE
@@ -154,116 +156,149 @@ function Get-WindowTitle {
     return $builder.ToString()
 }
 
+function Get-PreferredWorkspaceTokens {
+    param(
+        [string]$PreferredProjectName,
+        [string]$PreferredCwd
+    )
+
+    $tokens = @()
+
+    if (-not [string]::IsNullOrWhiteSpace($PreferredProjectName)) {
+        $tokens += $PreferredProjectName.ToLowerInvariant()
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($PreferredCwd)) {
+        $leaf = Split-Path $PreferredCwd -Leaf
+        if (-not [string]::IsNullOrWhiteSpace($leaf)) {
+            $tokens += $leaf.ToLowerInvariant()
+        }
+    }
+
+    return @($tokens | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+}
+
+function Get-VSCodeWindowCandidates {
+    param(
+        [string[]]$PreferredTokens
+    )
+
+    $candidates = @()
+
+    try {
+        $root = [System.Windows.Automation.AutomationElement]::RootElement
+        $children = $root.FindAll(
+            [System.Windows.Automation.TreeScope]::Children,
+            [System.Windows.Automation.Condition]::TrueCondition
+        )
+    } catch {
+        Write-DebugLog ("UIAutomation root query failed: {0}" -f $_.Exception.Message)
+        return @()
+    }
+
+    for ($index = 0; $index -lt $children.Count; $index++) {
+        try {
+            $child = $children.Item($index)
+            $processIdValue = [int]$child.GetCurrentPropertyValue(
+                [System.Windows.Automation.AutomationElement]::ProcessIdProperty
+            )
+            $handleValue = [int]$child.GetCurrentPropertyValue(
+                [System.Windows.Automation.AutomationElement]::NativeWindowHandleProperty
+            )
+            $titleValue = [string]$child.GetCurrentPropertyValue(
+                [System.Windows.Automation.AutomationElement]::NameProperty
+            )
+            $className = [string]$child.GetCurrentPropertyValue(
+                [System.Windows.Automation.AutomationElement]::ClassNameProperty
+            )
+
+            if (-not $processIdValue -or -not $handleValue -or [string]::IsNullOrWhiteSpace($titleValue)) {
+                continue
+            }
+
+            $process = Get-Process -Id $processIdValue -ErrorAction SilentlyContinue
+            if ($null -eq $process -or $process.ProcessName -notlike 'Code*') {
+                continue
+            }
+
+            $score = 0
+            $matchedTokens = @()
+            $titleLower = $titleValue.ToLowerInvariant()
+
+            foreach ($token in $PreferredTokens) {
+                if (-not [string]::IsNullOrWhiteSpace($token) -and $titleLower.Contains($token)) {
+                    $score += 3
+                    $matchedTokens += $token
+                }
+            }
+
+            if ($titleValue -like '*Visual Studio Code*') {
+                $score += 1
+            }
+
+            $candidate = [pscustomobject]@{
+                Handle = [IntPtr]$handleValue
+                Title = $titleValue
+                Score = $score
+                ProcessId = $processIdValue
+                Source = 'UIAutomation'
+            }
+            $candidates += $candidate
+            Write-DebugLog (
+                "uia candidate pid={0} handle={1} score={2} class={3} matched={4} title={5}" -f
+                $processIdValue,
+                $handleValue,
+                $score,
+                $className,
+                ($matchedTokens -join ','),
+                $titleValue
+            )
+        } catch {
+            Write-DebugLog ("UIAutomation candidate read failed: {0}" -f $_.Exception.Message)
+        }
+    }
+
+    Write-DebugLog ("uia candidate count={0}" -f $candidates.Count)
+    return $candidates
+}
+
 function Focus-VSCodeWindow {
     param(
         [string]$PreferredProjectName,
         [string]$PreferredCwd
     )
 
-    $candidates = New-Object System.Collections.Generic.List[object]
-    $fallbackProcesses = @()
-
-    try {
-        $fallbackProcesses = Get-Process | Where-Object {
-            $_.ProcessName -like 'Code*' -and $_.MainWindowHandle -ne 0 -and -not [string]::IsNullOrWhiteSpace($_.MainWindowTitle)
-        }
-    } catch {
-        Write-DebugLog ("Get-Process fallback failed: {0}" -f $_.Exception.Message)
+    $preferredLeaf = ""
+    if (-not [string]::IsNullOrWhiteSpace($PreferredCwd)) {
+        $preferredLeaf = Split-Path $PreferredCwd -Leaf
     }
+    $preferredTokens = Get-PreferredWorkspaceTokens -PreferredProjectName $PreferredProjectName -PreferredCwd $PreferredCwd
+    Write-DebugLog (
+        "focus start version=focus-v3-uia project={0} cwd={1} preferredLeaf={2} tokens={3}" -f
+        $PreferredProjectName,
+        $PreferredCwd,
+        $preferredLeaf,
+        ($preferredTokens -join ',')
+    )
 
-    foreach ($process in $fallbackProcesses) {
-        $score = 0
-        if ($PreferredProjectName -and $process.MainWindowTitle -like "*$PreferredProjectName*") {
-            $score += 3
-        }
-        if ($PreferredCwd) {
-            $leaf = Split-Path $PreferredCwd -Leaf
-            if ($leaf -and $process.MainWindowTitle -like "*$leaf*") {
-                $score += 3
-            }
-        }
-        if ($process.MainWindowTitle -like '*Visual Studio Code*' -or $process.MainWindowTitle -like '*Code*') {
-            $score += 1
-        }
-
-        $candidates.Add([pscustomobject]@{
-            Handle = [IntPtr]$process.MainWindowHandle
-            Title = $process.MainWindowTitle
-            Score = $score
-            ProcessId = $process.Id
-            Source = 'GetProcess'
-        }) | Out-Null
-        Write-DebugLog ("process candidate pid={0} score={1} title={2}" -f $process.Id, $score, $process.MainWindowTitle)
-    }
-
-    [Win32]::EnumWindows({
-        param($hWnd, $lParam)
-        if (-not [Win32]::IsWindowVisible($hWnd)) {
-            return $true
-        }
-
-        $title = Get-WindowTitle $hWnd
-        if ([string]::IsNullOrWhiteSpace($title)) {
-            return $true
-        }
-
-        [uint32]$pid = 0
-        [void][Win32]::GetWindowThreadProcessId($hWnd, [ref]$pid)
-        if ($pid -eq 0) {
-            return $true
-        }
-
-        try {
-            $process = Get-Process -Id $pid -ErrorAction Stop
-        } catch {
-            return $true
-        }
-
-        if ($process.ProcessName -notin @('Code', 'Code - Insiders')) {
-            return $true
-        }
-
-        $score = 0
-        if ($PreferredProjectName -and $title -like "*$PreferredProjectName*") {
-            $score += 3
-        }
-        if ($PreferredCwd) {
-            $leaf = Split-Path $PreferredCwd -Leaf
-            if ($leaf -and $title -like "*$leaf*") {
-                $score += 3
-            }
-        }
-        if ($title -like '*Visual Studio Code*' -or $title -like '*Code*') {
-            $score += 1
-        }
-
-        $candidates.Add([pscustomobject]@{
-            Handle = $hWnd
-            Title = $title
-            Score = $score
-            ProcessId = $pid
-            Source = 'EnumWindows'
-        }) | Out-Null
-        Write-DebugLog ("candidate pid={0} score={1} title={2}" -f $pid, $score, $title)
-        return $true
-    }, [IntPtr]::Zero) | Out-Null
+    $candidates = Get-VSCodeWindowCandidates -PreferredTokens $preferredTokens
 
     $target = $candidates |
-        Sort-Object @{ Expression = 'Score'; Descending = $true }, @{ Expression = 'Source'; Descending = $false } |
+        Sort-Object @{ Expression = 'Score'; Descending = $true }, @{ Expression = 'Title'; Descending = $false } |
         Select-Object -First 1
     if ($null -eq $target) {
         Write-DebugLog "focus failed: no VS Code window candidates found"
-
-        try {
-            $activated = $wshell.AppActivate('Visual Studio Code')
-            Write-DebugLog ("fallback AppActivate by title returned {0}" -f $activated)
-        } catch {
-            Write-DebugLog ("fallback AppActivate by title failed: {0}" -f $_.Exception.Message)
-        }
         return
     }
 
-    Write-DebugLog ("focus target source={0} pid={1} score={2} title={3}" -f $target.Source, $target.ProcessId, $target.Score, $target.Title)
+    Write-DebugLog (
+        "focus target source={0} pid={1} handle={2} score={3} title={4}" -f
+        $target.Source,
+        $target.ProcessId,
+        [int]$target.Handle,
+        $target.Score,
+        $target.Title
+    )
 
     try {
         $activated = $wshell.AppActivate([int]$target.ProcessId)

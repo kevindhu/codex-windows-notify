@@ -8,9 +8,9 @@ function Get-PreferredPythonw {
 
     $repoUserHome = Split-Path (Split-Path $RepoRoot -Parent) -Parent
     $candidates = @(
-        (Join-Path $repoUserHome "miniconda3\pythonw.exe"),
+        (Join-Path $repoUserHome "AppData\Local\Programs\Python\Python311\pythonw.exe"),
         (Join-Path $repoUserHome "AppData\Local\Programs\Python\Python312\pythonw.exe"),
-        (Join-Path $repoUserHome "AppData\Local\Programs\Python\Python311\pythonw.exe")
+        (Join-Path $repoUserHome "miniconda3\pythonw.exe")
     )
 
     foreach ($candidate in $candidates) {
