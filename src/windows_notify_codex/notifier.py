@@ -436,6 +436,7 @@ class CodexNotifier:
         self.sound_file = sound_file
         self.verbose = verbose
         self._running = True
+        self._is_priming = False
         self._files: dict[Path, FileCursor] = {}
         self._seen_turn_ids: set[str] = set()
         self._seen_prompt_ids: set[str] = set()
@@ -453,10 +454,14 @@ class CodexNotifier:
         return sorted(self.sessions_root.glob("*/*/*/rollout-*.jsonl"))
 
     def prime_existing_files(self) -> None:
-        for path in self.iter_rollout_files():
-            cursor = self._files.setdefault(path, FileCursor())
-            self._read_new_lines(path, cursor, notify=False)
-            cursor.initialized = True
+        self._is_priming = True
+        try:
+            for path in self.iter_rollout_files():
+                cursor = self._files.setdefault(path, FileCursor())
+                self._read_new_lines(path, cursor, notify=False)
+                cursor.initialized = True
+        finally:
+            self._is_priming = False
         self.log(f"Primed {len(self._files)} rollout file(s)")
 
     def watch_forever(self) -> None:
@@ -492,7 +497,8 @@ class CodexNotifier:
         try:
             record = json.loads(line)
         except json.JSONDecodeError:
-            self.log(f"[warn] bad json in {path}")
+            if not self._is_priming:
+                self.log(f"[warn] bad json in {path}")
             return
 
         record_type = record.get("type")
@@ -504,9 +510,10 @@ class CodexNotifier:
             cursor.session.originator = payload.get("originator")
             cursor.session.session_id = payload.get("id")
             cursor.session.cli_version = payload.get("cli_version")
-            self.log(
-                f"[meta] {path.name} source={cursor.session.source} originator={cursor.session.originator}"
-            )
+            if not self._is_priming:
+                self.log(
+                    f"[meta] {path.name} source={cursor.session.source} originator={cursor.session.originator}"
+                )
             return
 
         is_vscode = cursor.session.source == "vscode"
@@ -540,7 +547,7 @@ class CodexNotifier:
                 event_time=event_time,
                 last_message=last_message,
             )
-        else:
+        elif not self._is_priming:
             self.log(f"[prime] skipped historical completion for {path.name}")
 
     def _handle_response_item(
@@ -578,7 +585,8 @@ class CodexNotifier:
         self._seen_prompt_ids.add(prompt_id)
 
         if not notify:
-            self.log(f"[prime] skipped historical prompt for {path.name}")
+            if not self._is_priming:
+                self.log(f"[prime] skipped historical prompt for {path.name}")
             return
 
         event_time = str(record.get("timestamp") or datetime.now(timezone.utc).isoformat())
@@ -642,11 +650,10 @@ class CodexNotifier:
         last_message: str,
     ) -> None:
         foreground_process = get_foreground_process_name()
-        vscode_focused = foreground_process in VSCODE_PROCESS_NAMES
         cwd = session.cwd or "VS Code"
         project_name = Path(cwd).name
-        notified = not vscode_focused
-        notification_reason = "shown" if notified else "vscode_focused"
+        notified = True
+        notification_reason = "shown"
         record = {
             "event_time": event_time,
             "logged_at": datetime.now(timezone.utc).isoformat(),
@@ -667,10 +674,6 @@ class CodexNotifier:
             "last_agent_message": last_message,
         }
         self._append_log_record(record)
-
-        if not notified:
-            self.log("[skip] VS Code is focused")
-            return
 
         title = "Codex task finished"
         body = _truncate(f"{project_name}: {last_message}", 240)
@@ -694,11 +697,10 @@ class CodexNotifier:
         message: str,
     ) -> None:
         foreground_process = get_foreground_process_name()
-        vscode_focused = foreground_process in VSCODE_PROCESS_NAMES
         cwd = session.cwd or "VS Code"
         project_name = Path(cwd).name
-        notified = not vscode_focused
-        notification_reason = "shown" if notified else "vscode_focused"
+        notified = True
+        notification_reason = "shown"
         record = {
             "event_time": event_time,
             "logged_at": datetime.now(timezone.utc).isoformat(),
@@ -721,10 +723,6 @@ class CodexNotifier:
             "message": message,
         }
         self._append_log_record(record)
-
-        if not notified:
-            self.log("[skip] VS Code is focused")
-            return
 
         title = "Codex needs attention"
         body = _truncate(f"{project_name}: {message}", 240)

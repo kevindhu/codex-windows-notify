@@ -23,6 +23,22 @@ From this repo:
 python .\codex_notify.py
 ```
 
+For local debugging in a visible terminal:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run_notifier_debug.ps1
+```
+
+That runs the watcher in the foreground with `--verbose` and appends terminal output to `.\logs\manual-debug.log`.
+
+To manually start the hidden/background version from your own terminal session:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run_notifier_background.ps1
+```
+
+That uses the `pythonw.exe` next to whatever `python` resolves to on your machine, which makes it easier to compare foreground vs background behavior.
+
 Run it without a console window:
 
 ```powershell
@@ -131,7 +147,7 @@ If you prefer the Windows Startup folder instead of Task Scheduler, use:
 powershell -ExecutionPolicy Bypass -File .\install_startup_folder.ps1
 ```
 
-That copies [run_codex_notifier_hidden.vbs](c:/Users/lemondoo/PROJECTS/windows-notify-codex/run_codex_notifier_hidden.vbs) into your user Startup folder so the notifier launches automatically at sign-in.
+That creates a `CodexNotifier.cmd` launcher in your user Startup folder that starts the working `pythonw.exe` for [codex_notify.py](c:/Users/lemondoo/PROJECTS/windows-notify-codex/codex_notify.py), so the notifier launches automatically at sign-in without going through Windows Script Host.
 
 Remove it later with:
 

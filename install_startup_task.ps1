@@ -1,8 +1,48 @@
 $ErrorActionPreference = "Stop"
 
+function Get-PreferredPythonw {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$RepoRoot
+    )
+
+    $repoUserHome = Split-Path (Split-Path $RepoRoot -Parent) -Parent
+    $candidates = @(
+        (Join-Path $repoUserHome "miniconda3\pythonw.exe"),
+        (Join-Path $repoUserHome "AppData\Local\Programs\Python\Python312\pythonw.exe"),
+        (Join-Path $repoUserHome "AppData\Local\Programs\Python\Python311\pythonw.exe")
+    )
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path $candidate) {
+            return $candidate
+        }
+    }
+
+    $pythonFromCommand = ""
+    try {
+        $pythonFromCommand = (& python -c "import sys; print(sys.executable)" 2>$null | Select-Object -First 1).Trim()
+    } catch {}
+
+    if ($pythonFromCommand) {
+        $siblingPythonw = Join-Path (Split-Path -Parent $pythonFromCommand) "pythonw.exe"
+        if (Test-Path $siblingPythonw) {
+            return $siblingPythonw
+        }
+    }
+
+    $python = (Get-Command python.exe -ErrorAction Stop).Source
+    $pythonw = Join-Path (Split-Path -Parent $python) "pythonw.exe"
+    if (Test-Path $pythonw) {
+        return $pythonw
+    }
+
+    throw "pythonw.exe not found for repo root: $RepoRoot"
+}
+
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $taskName = "Codex VS Code Notifier"
-$pythonw = (Get-Command pythonw.exe -ErrorAction Stop).Source
+$pythonw = Get-PreferredPythonw -RepoRoot $repoRoot
 $scriptPath = Join-Path $repoRoot "codex_notify.py"
 $workDir = $repoRoot
 $logDir = Join-Path $repoRoot "logs"
