@@ -19,6 +19,7 @@ POLL_SECONDS = 1.0
 DEFAULT_COMPLETION_SOUND = "none"
 DEFAULT_PROMPT_SOUND = "none"
 DEFAULT_SOUND_FILE = "./sounds/smallnotify.wav"
+CLICK_FOCUS_ENABLED = False
 VSCODE_PROCESS_NAMES = {
     "code.exe",
     "code - insiders.exe",
@@ -99,6 +100,7 @@ $soundCommand = $env:CODEX_NOTIFY_SOUND_COMMAND
 $projectName = $env:CODEX_NOTIFY_PROJECT_NAME
 $cwd = $env:CODEX_NOTIFY_CWD
 $clickLogPath = $env:CODEX_NOTIFY_CLICK_LOG
+$focusOnClickEnabled = $env:CODEX_NOTIFY_FOCUS_ON_CLICK -eq '1'
 
 function Write-DebugLog {
     param([string]$Line)
@@ -387,7 +389,11 @@ function Invoke-ClickFeedback {
 $closeForm = {
     Write-DebugLog ("notification clicked project={0} cwd={1}" -f $projectName, $cwd)
     Invoke-ClickFeedback
-    Focus-VSCodeWindow -PreferredProjectName $projectName -PreferredCwd $cwd
+    if ($focusOnClickEnabled) {
+        Focus-VSCodeWindow -PreferredProjectName $projectName -PreferredCwd $cwd
+    } else {
+        Write-DebugLog "focus skipped: click-to-focus disabled"
+    }
     if (-not $form.IsDisposed) {
         $form.Close()
     }
@@ -419,6 +425,7 @@ if ($soundFile -and (Test-Path $soundFile)) {
     env["CODEX_NOTIFY_PROJECT_NAME"] = project_name
     env["CODEX_NOTIFY_CWD"] = cwd or ""
     env["CODEX_NOTIFY_CLICK_LOG"] = str((Path.cwd() / "logs" / "notification-clicks.log").resolve())
+    env["CODEX_NOTIFY_FOCUS_ON_CLICK"] = "1" if CLICK_FOCUS_ENABLED else "0"
     creationflags = 0
     startupinfo = None
     if os.name == "nt":
@@ -493,11 +500,24 @@ class CodexNotifier:
         try:
             for path in self.iter_rollout_files():
                 cursor = self._files.setdefault(path, FileCursor())
-                self._read_new_lines(path, cursor, notify=False)
+                self._prime_existing_file(path, cursor)
                 cursor.initialized = True
         finally:
             self._is_priming = False
         self.log(f"Primed {len(self._files)} rollout file(s)")
+
+    def _prime_existing_file(self, path: Path, cursor: FileCursor) -> None:
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                first_line = handle.readline().strip()
+                if first_line:
+                    self._handle_line(path, cursor, first_line, notify=False)
+                handle.seek(0, os.SEEK_END)
+                cursor.position = handle.tell()
+        except FileNotFoundError:
+            self._files.pop(path, None)
+        except OSError as exc:
+            self.log(f"[warn] failed priming {path}: {exc}")
 
     def watch_forever(self) -> None:
         self.prime_existing_files()

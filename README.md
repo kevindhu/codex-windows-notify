@@ -48,13 +48,14 @@ codex-notify
 
 ## Behavior
 
-- Existing historical sessions are indexed on startup but do not notify.
-- Existing historical sessions are indexed on startup but are not backfilled into the completion log.
+- Existing rollout files are fast-forwarded on startup so older session history is not reparsed.
+- Existing historical sessions do not notify and are not backfilled into the completion log.
 - New `task_complete` events from VS Code sessions do notify.
 - New `task_complete` events are appended to `./logs/codex-completions.jsonl` by default.
 - Notifications are shown even if VS Code is focused.
 - The notification body uses the last agent message when available.
 - Notifications use `.\sounds\smallnotify.wav` by default when that file exists.
+- Clicking a notification currently closes it without trying to focus VS Code.
 
 ## Completion Log
 
