@@ -1,1 +1,1 @@
-"""Codex completion notifier for VS Code on Windows."""
+"""Codex completion notifier for Windows."""

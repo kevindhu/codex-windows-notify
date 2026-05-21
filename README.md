@@ -1,16 +1,16 @@
-# Codex VS Code Windows Notifier
+# Codex Windows Notifier
 
-This is a tiny background watcher for Codex in VS Code on Windows.
+This is a tiny background watcher for Codex on Windows.
 
-It watches the local Codex rollout logs under `~/.codex/sessions`, looks for real `task_complete` events from `source: "vscode"`, and shows a toast-style Windows popup when a task finishes.
+It watches the local Codex rollout logs under `~/.codex/sessions`, looks for real top-level `task_complete` events, and shows a toast-style Windows popup when a task finishes. It does not require VS Code to be open.
 
 It also writes a structured completion log so you can review what finished, when it finished, which project it belonged to, and whether a notification was shown.
 
 ## Why this signal
 
-The reliable completion signal is not the window title or a heuristic. Codex writes structured session logs locally, and VS Code-originated sessions include:
+The reliable completion signal is not the window title or a heuristic. Codex writes structured session logs locally, and top-level sessions include:
 
-- `session_meta` with `source: "vscode"`
+- `session_meta` with a normal string `source`
 - `event_msg` with `payload.type: "task_complete"`
 
 That makes the notifier much more dependable than polling the UI.
@@ -50,11 +50,12 @@ codex-notify
 
 - Existing rollout files are fast-forwarded on startup so older session history is not reparsed.
 - Existing historical sessions do not notify and are not backfilled into the completion log.
-- New `task_complete` events from VS Code sessions do notify.
+- New `task_complete` events from top-level Codex sessions do notify.
+- Subagent child sessions are ignored to avoid duplicate or noisy popups.
 - New `task_complete` events are appended to `./logs/codex-completions.jsonl` by default.
-- Notifications are shown even if VS Code is focused.
+- Notifications are shown even if VS Code is closed.
 - The notification body uses the last agent message when available.
-- Notifications use `.\sounds\smallnotify.wav` by default when that file exists.
+- Notification sound is disabled by default.
 - Clicking a notification currently closes it without trying to focus VS Code.
 
 ## Completion Log
@@ -81,13 +82,19 @@ You can change the log location with:
 python .\codex_notify.py --log-path .\logs\my-codex-log.jsonl
 ```
 
+Sound is off by default. To enable the bundled WAV sound:
+
+```powershell
+python .\codex_notify.py --sound-enabled
+```
+
 You can also change the Windows alert sounds:
 
 ```powershell
-python .\codex_notify.py --sound-file .\sounds\smallnotify.wav --completion-sound none --prompt-sound none
+python .\codex_notify.py --sound-enabled --sound-file .\sounds\smallnotify.wav --completion-sound none --prompt-sound none
 ```
 
-The `--completion-sound` and `--prompt-sound` options are fallback system sounds only, used if the WAV file is missing. Available values are `asterisk`, `beep`, `exclamation`, `hand`, `question`, and `none`.
+The `--completion-sound` and `--prompt-sound` options are fallback system sounds only, used when `--sound-enabled` is set and the WAV file is missing. Available values are `asterisk`, `beep`, `exclamation`, `hand`, `question`, and `none`.
 
 Convert the bundled MP3 to WAV with:
 

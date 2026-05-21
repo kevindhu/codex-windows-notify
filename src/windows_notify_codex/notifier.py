@@ -445,7 +445,7 @@ if ($soundFile -and (Test-Path $soundFile)) {
 
 @dataclass
 class SessionInfo:
-    source: str | None = None
+    source: object | None = None
     cwd: str | None = None
     originator: str | None = None
     session_id: str | None = None
@@ -468,6 +468,7 @@ class CodexNotifier:
         completion_sound: str = DEFAULT_COMPLETION_SOUND,
         prompt_sound: str = DEFAULT_PROMPT_SOUND,
         sound_file: Path | None = None,
+        sound_enabled: bool = False,
         verbose: bool = False,
     ) -> None:
         self.sessions_root = sessions_root
@@ -476,6 +477,7 @@ class CodexNotifier:
         self.completion_sound = completion_sound
         self.prompt_sound = prompt_sound
         self.sound_file = sound_file
+        self.sound_enabled = sound_enabled
         self.verbose = verbose
         self._running = True
         self._is_priming = False
@@ -489,6 +491,9 @@ class CodexNotifier:
 
     def stop(self, *_args: object) -> None:
         self._running = False
+
+    def _is_top_level_session(self, session: SessionInfo) -> bool:
+        return isinstance(session.source, str) and bool(session.source.strip())
 
     def iter_rollout_files(self) -> Iterable[Path]:
         if not self.sessions_root.exists():
@@ -571,8 +576,7 @@ class CodexNotifier:
                 )
             return
 
-        is_vscode = cursor.session.source == "vscode"
-        if not is_vscode:
+        if not self._is_top_level_session(cursor.session):
             return
 
         if record_type == "response_item":
@@ -592,7 +596,7 @@ class CodexNotifier:
                 return
             self._seen_turn_ids.add(turn_id)
 
-        last_message = payload.get("last_agent_message") or "Codex finished a task in VS Code."
+        last_message = payload.get("last_agent_message") or "Codex finished a task."
         event_time = record.get("timestamp") or datetime.now(timezone.utc).isoformat()
         if notify:
             self._record_completion(
@@ -705,7 +709,7 @@ class CodexNotifier:
         last_message: str,
     ) -> None:
         foreground_process = get_foreground_process_name()
-        cwd = session.cwd or "VS Code"
+        cwd = session.cwd or "Codex"
         project_name = Path(cwd).name
         notified = True
         notification_reason = "shown"
@@ -736,7 +740,7 @@ class CodexNotifier:
         show_windows_notification(
             title,
             body,
-            self.completion_sound,
+            self._sound_choice(self.completion_sound),
             self._sound_file_str(),
             project_name,
             session.cwd,
@@ -752,7 +756,7 @@ class CodexNotifier:
         message: str,
     ) -> None:
         foreground_process = get_foreground_process_name()
-        cwd = session.cwd or "VS Code"
+        cwd = session.cwd or "Codex"
         project_name = Path(cwd).name
         notified = True
         notification_reason = "shown"
@@ -785,7 +789,7 @@ class CodexNotifier:
         show_windows_notification(
             title,
             body,
-            self.prompt_sound,
+            self._sound_choice(self.prompt_sound),
             self._sound_file_str(),
             project_name,
             session.cwd,
@@ -800,13 +804,18 @@ class CodexNotifier:
             self.log(f"[warn] failed writing completion log {self.log_path}: {exc}")
 
     def _sound_file_str(self) -> str | None:
-        if self.sound_file is None:
+        if not self.sound_enabled or self.sound_file is None:
             return None
         return str(self.sound_file)
 
+    def _sound_choice(self, sound: str) -> str:
+        if not self.sound_enabled:
+            return "none"
+        return sound
+
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Notify on Codex task completion in VS Code.")
+    parser = argparse.ArgumentParser(description="Notify on top-level Codex task completion.")
     parser.add_argument(
         "--sessions-root",
         default="~/.codex/sessions",
@@ -826,19 +835,30 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--sound-file",
         default=DEFAULT_SOUND_FILE,
-        help="Path to a WAV file to play for notifications. Default: %(default)s",
+        help="Path to a WAV file to play when --sound-enabled is set. Default: %(default)s",
+    )
+    parser.add_argument(
+        "--sound-enabled",
+        action="store_true",
+        help="Play the configured WAV or fallback system sound for notifications.",
     )
     parser.add_argument(
         "--completion-sound",
         choices=sorted(SOUND_CHOICES.keys()),
         default=DEFAULT_COMPLETION_SOUND,
-        help="Fallback system sound for completion notifications if the WAV file is missing. Default: %(default)s",
+        help=(
+            "Fallback system sound for completion notifications when --sound-enabled "
+            "is set and the WAV file is missing. Default: %(default)s"
+        ),
     )
     parser.add_argument(
         "--prompt-sound",
         choices=sorted(SOUND_CHOICES.keys()),
         default=DEFAULT_PROMPT_SOUND,
-        help="Fallback system sound for prompt notifications if the WAV file is missing. Default: %(default)s",
+        help=(
+            "Fallback system sound for prompt notifications when --sound-enabled "
+            "is set and the WAV file is missing. Default: %(default)s"
+        ),
     )
     parser.add_argument(
         "--verbose",
@@ -857,6 +877,7 @@ def main(argv: list[str] | None = None) -> int:
         completion_sound=args.completion_sound,
         prompt_sound=args.prompt_sound,
         sound_file=_expand(args.sound_file),
+        sound_enabled=args.sound_enabled,
         verbose=args.verbose,
     )
 
@@ -864,8 +885,9 @@ def main(argv: list[str] | None = None) -> int:
     if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, notifier.stop)
 
-    print(f"Watching {notifier.sessions_root} for VS Code Codex completions...", flush=True)
+    print(f"Watching {notifier.sessions_root} for top-level Codex completions...", flush=True)
     print(f"Logging completions to {notifier.log_path}", flush=True)
+    print(f"Notification sound: {'enabled' if notifier.sound_enabled else 'disabled'}", flush=True)
     notifier.watch_forever()
     print("Stopped.", flush=True)
     return 0

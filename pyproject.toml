@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "windows-notify-codex"
 version = "0.1.0"
-description = "Notify on Codex VS Code task completion when VS Code is unfocused."
+description = "Notify on top-level Codex task completion on Windows."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
