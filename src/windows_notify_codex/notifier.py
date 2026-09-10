@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 import ctypes.wintypes
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import os
 import signal
@@ -16,6 +16,7 @@ from typing import Iterable
 
 
 POLL_SECONDS = 1.0
+MAX_NOTIFICATION_EVENT_AGE = timedelta(days=5)
 DEFAULT_COMPLETION_SOUND = "none"
 DEFAULT_PROMPT_SOUND = "none"
 DEFAULT_SOUND_FILE = "./sounds/smallnotify.wav"
@@ -450,6 +451,7 @@ class SessionInfo:
     originator: str | None = None
     session_id: str | None = None
     cli_version: str | None = None
+    forked_from_id: str | None = None
 
 
 @dataclass
@@ -484,6 +486,8 @@ class CodexNotifier:
         self._files: dict[Path, FileCursor] = {}
         self._seen_turn_ids: set[str] = set()
         self._seen_prompt_ids: set[str] = set()
+        self._indexed_source_session_ids: set[str] = set()
+        self._log_ids_primed = False
 
     def log(self, message: str) -> None:
         if self.verbose:
@@ -495,14 +499,42 @@ class CodexNotifier:
     def _is_top_level_session(self, session: SessionInfo) -> bool:
         return isinstance(session.source, str) and bool(session.source.strip())
 
+    def _is_historical_replay(self, record: dict[str, object]) -> bool:
+        timestamp = record.get("timestamp")
+        if not isinstance(timestamp, str) or not timestamp.strip():
+            return False
+
+        normalized = timestamp.strip()
+        if normalized.endswith("Z"):
+            normalized = normalized[:-1] + "+00:00"
+
+        try:
+            event_time = datetime.fromisoformat(normalized)
+        except ValueError:
+            return False
+
+        if event_time.tzinfo is None:
+            event_time = event_time.replace(tzinfo=timezone.utc)
+        else:
+            event_time = event_time.astimezone(timezone.utc)
+
+        return datetime.now(timezone.utc) - event_time > MAX_NOTIFICATION_EVENT_AGE
+
     def iter_rollout_files(self) -> Iterable[Path]:
         if not self.sessions_root.exists():
             return []
         return sorted(self.sessions_root.glob("*/*/*/rollout-*.jsonl"))
 
+    def iter_rollout_files_for_session(self, session_id: str) -> Iterable[Path]:
+        if not self.sessions_root.exists():
+            return []
+        pattern = f"*/*/*/rollout-*{session_id}.jsonl"
+        return sorted(self.sessions_root.glob(pattern))
+
     def prime_existing_files(self) -> None:
         self._is_priming = True
         try:
+            self._prime_completion_log_ids()
             for path in self.iter_rollout_files():
                 cursor = self._files.setdefault(path, FileCursor())
                 self._prime_existing_file(path, cursor)
@@ -510,6 +542,37 @@ class CodexNotifier:
         finally:
             self._is_priming = False
         self.log(f"Primed {len(self._files)} rollout file(s)")
+
+    def _prime_completion_log_ids(self) -> None:
+        if self._log_ids_primed:
+            return
+        self._log_ids_primed = True
+
+        try:
+            with self.log_path.open("r", encoding="utf-8") as handle:
+                while True:
+                    raw_line = handle.readline()
+                    if not raw_line:
+                        break
+                    line = raw_line.strip()
+                    if not line:
+                        continue
+                    try:
+                        record = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+
+                    turn_id = record.get("turn_id")
+                    if isinstance(turn_id, str) and turn_id:
+                        self._seen_turn_ids.add(turn_id)
+
+                    prompt_id = record.get("prompt_id")
+                    if isinstance(prompt_id, str) and prompt_id:
+                        self._seen_prompt_ids.add(prompt_id)
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            self.log(f"[warn] failed priming completion log {self.log_path}: {exc}")
 
     def _prime_existing_file(self, path: Path, cursor: FileCursor) -> None:
         try:
@@ -570,6 +633,8 @@ class CodexNotifier:
             cursor.session.originator = payload.get("originator")
             cursor.session.session_id = payload.get("id")
             cursor.session.cli_version = payload.get("cli_version")
+            cursor.session.forked_from_id = payload.get("forked_from_id")
+            self._maybe_index_fork_source(cursor.session)
             if not self._is_priming:
                 self.log(
                     f"[meta] {path.name} source={cursor.session.source} originator={cursor.session.originator}"
@@ -596,6 +661,9 @@ class CodexNotifier:
                 return
             self._seen_turn_ids.add(turn_id)
 
+        if notify and self._is_historical_replay(record):
+            return
+
         last_message = payload.get("last_agent_message") or "Codex finished a task."
         event_time = record.get("timestamp") or datetime.now(timezone.utc).isoformat()
         if notify:
@@ -616,9 +684,39 @@ class CodexNotifier:
         record: dict[str, object],
         notify: bool,
     ) -> None:
+        prompt_kind, prompt_id, prompt_message = self._prompt_event_details(record)
+        if prompt_kind is None or prompt_id is None:
+            return
+
+        if prompt_id in self._seen_prompt_ids:
+            return
+        self._seen_prompt_ids.add(prompt_id)
+
+        if not notify:
+            if not self._is_priming:
+                self.log(f"[prime] skipped historical prompt for {path.name}")
+            return
+
+        if self._is_historical_replay(record):
+            return
+
+        event_time = str(record.get("timestamp") or datetime.now(timezone.utc).isoformat())
+        self._record_prompt(
+            session=cursor.session,
+            rollout_path=path,
+            prompt_id=prompt_id,
+            prompt_kind=prompt_kind,
+            event_time=event_time,
+            message=prompt_message or "Codex needs your attention.",
+        )
+
+    def _prompt_event_details(
+        self,
+        record: dict[str, object],
+    ) -> tuple[str | None, str | None, str | None]:
         payload = record.get("payload", {})
         if not isinstance(payload, dict):
-            return
+            return None, None, None
 
         payload_type = payload.get("type")
         prompt_kind: str | None = None
@@ -636,27 +734,60 @@ class CodexNotifier:
                 prompt_id = str(payload.get("call_id") or payload.get("name") or record.get("timestamp"))
                 prompt_message = self._extract_approval_message(payload, nested)
 
-        if prompt_kind is None or prompt_id is None:
-            return
+        return prompt_kind, prompt_id, prompt_message
 
-        if prompt_id in self._seen_prompt_ids:
+    def _maybe_index_fork_source(self, session: SessionInfo) -> None:
+        forked_from_id = session.forked_from_id
+        if not isinstance(forked_from_id, str):
             return
-        self._seen_prompt_ids.add(prompt_id)
-
-        if not notify:
-            if not self._is_priming:
-                self.log(f"[prime] skipped historical prompt for {path.name}")
+        source_session_id = forked_from_id.strip()
+        if not source_session_id:
             return
+        if source_session_id in self._indexed_source_session_ids:
+            return
+        self._indexed_source_session_ids.add(source_session_id)
 
-        event_time = str(record.get("timestamp") or datetime.now(timezone.utc).isoformat())
-        self._record_prompt(
-            session=cursor.session,
-            rollout_path=path,
-            prompt_id=prompt_id,
-            prompt_kind=prompt_kind,
-            event_time=event_time,
-            message=prompt_message or "Codex needs your attention.",
-        )
+        for path in self.iter_rollout_files_for_session(source_session_id):
+            self._index_ids_from_rollout_file(path)
+
+    def _index_ids_from_rollout_file(self, path: Path) -> None:
+        try:
+            with path.open("r", encoding="utf-8") as handle:
+                while True:
+                    raw_line = handle.readline()
+                    if not raw_line:
+                        break
+                    line = raw_line.strip()
+                    if not line:
+                        continue
+
+                    try:
+                        record = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+
+                    record_type = record.get("type")
+                    if record_type == "event_msg":
+                        payload = record.get("payload", {})
+                        if not isinstance(payload, dict):
+                            continue
+                        if payload.get("type") != "task_complete":
+                            continue
+                        turn_id = payload.get("turn_id")
+                        if isinstance(turn_id, str) and turn_id:
+                            self._seen_turn_ids.add(turn_id)
+                        continue
+
+                    if record_type != "response_item":
+                        continue
+
+                    _prompt_kind, prompt_id, _prompt_message = self._prompt_event_details(record)
+                    if prompt_id is not None:
+                        self._seen_prompt_ids.add(prompt_id)
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            self.log(f"[warn] failed indexing source session {path}: {exc}")
 
     def _parse_nested_payload(self, payload: dict[str, object]) -> dict[str, object] | None:
         for key in ("input", "arguments"):

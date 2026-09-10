@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
 
-$repoRoot = Split-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) -Parent
+$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 $preferredPython = Join-Path $env:LOCALAPPDATA "Programs\Python\Python311\python.exe"
 $python = ""
 

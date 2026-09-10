@@ -165,6 +165,25 @@ That prevented UI Automation candidate discovery from working until it was renam
 
 This was a straightforward implementation bug and should have been caught faster.
 
+### Error: launcher scripts walked up to `commands/` instead of the repo root
+
+The run and startup scripts used:
+
+```powershell
+Split-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) -Parent
+```
+
+That resolves to `...\windows-notify-codex\commands`, not the actual repo root, for scripts under
+`commands/run/` and `commands/misc/`.
+
+That broke script-derived paths like:
+
+- `commands\codex_notify.py`
+- startup launchers that `cd` into `...\commands`
+
+The safer fix is to derive the repo root from `$PSScriptRoot` with an explicit `..\..` and
+`Resolve-Path`, so the scripts keep working if they are launched from any current working directory.
+
 ### Error: startup priming logs were too noisy
 
 The debug runner originally printed massive amounts of historical startup noise:
@@ -187,6 +206,32 @@ These ended up being the reliable pieces:
 - Python 3.11 as the explicit preferred interpreter
 - startup folder launcher matching the known-good Python 3.11 background command
 - UI Automation for discovering visible VS Code windows when clicking the toast
+
+## Fork Replay Note
+
+Codex forked sessions can append historical source-thread events as fresh lines in the new rollout file.
+
+The important detail is that those replayed `task_complete` and prompt events keep their original IDs.
+
+That means a fast startup path that reads `session_meta` and jumps to EOF is not enough by itself.
+
+The notifier still needs a second dedupe path:
+
+- seed seen IDs from its own completion log on startup
+- when a forked session appears, use `forked_from_id` to index the source session's historical turn and prompt IDs
+
+That targeted indexing suppresses replay noise without reparsing every historical rollout file on each startup.
+
+## Workspace-Move Replay Note
+
+Moving or reopening a workspace can append historical events directly to old rollout files without creating a
+fork or preserving IDs that the notifier has already logged. In the observed failure, May completion and
+approval records were appended again in September and produced a series of stale notifications.
+
+ID deduplication and fork-source indexing cannot catch unseen IDs in this case. Prompt and completion records
+must also pass a freshness check before notifying. Records more than five days old are marked seen but silently
+discarded, preventing workspace moves from resurfacing historical questions while preserving recent
+notifications.
 
 ## What I Should Do Next Time
 
@@ -215,4 +260,3 @@ The better approach would have been much simpler:
 - prove manual background works
 - copy that exact command into startup
 - then fix click-focus only
-

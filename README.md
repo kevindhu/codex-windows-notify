@@ -48,8 +48,11 @@ codex-notify
 
 ## Behavior
 
-- Existing rollout files are fast-forwarded on startup so older session history is not reparsed.
+- Existing rollout files are primed to EOF on startup without notifying, so older session history is not backfilled as new popups.
 - Existing historical sessions do not notify and are not backfilled into the completion log.
+- Historical `turn_id` and prompt IDs are remembered from the notifier's own completion log on startup.
+- When a forked session appears with `forked_from_id`, the notifier indexes that source session's historical turn and prompt IDs before replayed events arrive, which suppresses duplicate notifications.
+- Prompt and completion records older than five days are treated as historical replay and never shown, even when a workspace move appends them to an already-watched rollout file with previously unseen IDs.
 - New `task_complete` events from top-level Codex sessions do notify.
 - Subagent child sessions are ignored to avoid duplicate or noisy popups.
 - New `task_complete` events are appended to `./logs/codex-completions.jsonl` by default.
