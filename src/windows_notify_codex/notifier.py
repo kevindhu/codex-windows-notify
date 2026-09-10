@@ -89,6 +89,24 @@ def show_windows_notification(
 ) -> None:
     sound_command = SOUND_CHOICES.get(sound, "")
     script = r"""
+# Set awareness before WPF or any popup HWND is created. PowerShell's host
+# is DPI-unaware by default, even when Windows display scaling is above 100%.
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public static class NotificationDpi {
+    [DllImport("user32.dll")]
+    public static extern bool SetProcessDpiAwarenessContext(IntPtr context);
+    [DllImport("user32.dll")]
+    public static extern IntPtr SetThreadDpiAwarenessContext(IntPtr context);
+    [DllImport("user32.dll")]
+    public static extern uint GetDpiForWindow(IntPtr window);
+}
+"@
+[void][NotificationDpi]::SetProcessDpiAwarenessContext([IntPtr](-4))
+[void][NotificationDpi]::SetThreadDpiAwarenessContext([IntPtr](-4))
+[AppContext]::SetSwitch('Switch.System.Windows.DoNotScaleForDpiChanges', $false)
+Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 Add-Type -AssemblyName UIAutomationClient
@@ -334,75 +352,93 @@ function Focus-VSCodeWindow {
     Write-DebugLog ("window state after focus minimized={0} maximized={1}" -f $afterMinimized, $afterMaximized)
 }
 
-$form = New-Object System.Windows.Forms.Form
-$form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
-$form.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual
-$form.ShowInTaskbar = $false
-$form.TopMost = $true
-$form.BackColor = [System.Drawing.Color]::FromArgb(28, 28, 30)
-$form.ForeColor = [System.Drawing.Color]::White
-$form.Size = New-Object System.Drawing.Size(460, 156)
-$form.Padding = New-Object System.Windows.Forms.Padding(18, 16, 18, 16)
-$form.Cursor = [System.Windows.Forms.Cursors]::Hand
-
-$workingArea = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
-$form.Location = New-Object System.Drawing.Point(
-    ($workingArea.Right - $form.Width - 12),
-    ($workingArea.Bottom - $form.Height - 12)
-)
-
-$titleLabel = New-Object System.Windows.Forms.Label
+# WPF draws the selected card in device-independent units at the monitor DPI.
+# Text and rounded edges are rendered directly, rather than stretching a 96-DPI bitmap.
+[xml]$layout = @"
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="460" Height="156" WindowStyle="None" ResizeMode="NoResize"
+        WindowStartupLocation="Manual" ShowInTaskbar="False" Topmost="True"
+        AllowsTransparency="True" Background="Transparent" Cursor="Hand"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="Grayscale">
+    <Border x:Name="Card" Background="#1E1F22" BorderBrush="#414349"
+            BorderThickness="1" CornerRadius="10" RenderTransformOrigin="0.5,0.5">
+        <Border.RenderTransform><ScaleTransform /></Border.RenderTransform>
+        <Grid Margin="19,15,19,17">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="28" />
+                <RowDefinition Height="8" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Ellipse x:Name="StatusDot" Width="6" Height="6" Fill="#85C7AA"
+                     HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0,8,0,0" />
+            <TextBlock x:Name="TitleLabel" Margin="14,0,0,0" FontFamily="Segoe UI"
+                       FontSize="16" FontWeight="Bold" Foreground="#F4F5F7"
+                       TextTrimming="CharacterEllipsis" />
+            <TextBlock x:Name="MessageLabel" Grid.Row="2" FontFamily="Segoe UI"
+                       FontSize="14" Foreground="#C7CAD1" TextWrapping="Wrap"
+                       TextTrimming="CharacterEllipsis" LineHeight="20"
+                       LineStackingStrategy="BlockLineHeight" ClipToBounds="True" />
+        </Grid>
+    </Border>
+</Window>
+"@
+$layoutReader = New-Object System.Xml.XmlNodeReader($layout)
+try {
+    $form = [System.Windows.Markup.XamlReader]::Load($layoutReader)
+} finally {
+    $layoutReader.Close()
+}
+$card = $form.FindName('Card')
+$titleLabel = $form.FindName('TitleLabel')
+$messageLabel = $form.FindName('MessageLabel')
 $titleLabel.Text = $title
-$titleLabel.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 13)
-$titleLabel.ForeColor = [System.Drawing.Color]::White
-$titleLabel.AutoSize = $false
-$titleLabel.Location = New-Object System.Drawing.Point(18, 16)
-$titleLabel.Size = New-Object System.Drawing.Size(424, 30)
-
-$messageLabel = New-Object System.Windows.Forms.Label
 $messageLabel.Text = $message
-$messageLabel.Font = New-Object System.Drawing.Font('Segoe UI', 11)
-$messageLabel.ForeColor = [System.Drawing.Color]::FromArgb(232, 232, 235)
-$messageLabel.AutoSize = $false
-$messageLabel.Location = New-Object System.Drawing.Point(18, 50)
-$messageLabel.Size = New-Object System.Drawing.Size(424, 84)
-$messageLabel.Cursor = [System.Windows.Forms.Cursors]::Hand
-
-$form.Controls.Add($titleLabel)
-$form.Controls.Add($messageLabel)
-
-function Invoke-ClickFeedback {
-    $originalSize = $form.Size
-    $originalLocation = $form.Location
-    $shrinkWidth = [Math]::Max(420, $originalSize.Width - 14)
-    $shrinkHeight = [Math]::Max(138, $originalSize.Height - 8)
-    $shrinkX = $originalLocation.X + [Math]::Floor(($originalSize.Width - $shrinkWidth) / 2)
-    $shrinkY = $originalLocation.Y + [Math]::Floor(($originalSize.Height - $shrinkHeight) / 2)
-
-    $form.Size = New-Object System.Drawing.Size($shrinkWidth, $shrinkHeight)
-    $form.Location = New-Object System.Drawing.Point($shrinkX, $shrinkY)
-    Start-Sleep -Milliseconds 80
-    $form.Size = $originalSize
-    $form.Location = $originalLocation
-    Start-Sleep -Milliseconds 70
+if ($title -eq 'Codex needs attention') {
+    $form.FindName('StatusDot').Fill = [System.Windows.Media.BrushConverter]::new().ConvertFromString('#DEB977')
 }
 
-$closeForm = {
-    Write-DebugLog ("notification clicked project={0} cwd={1}" -f $projectName, $cwd)
-    Invoke-ClickFeedback
+$form.Add_SourceInitialized({
+    $windowHandle = [System.Windows.Interop.WindowInteropHelper]::new($form).Handle
+    $workingArea = [System.Windows.Forms.Screen]::FromHandle($windowHandle).WorkingArea
+    $fromDevice = [System.Windows.PresentationSource]::FromVisual($form).CompositionTarget.TransformFromDevice
+    $corner = $fromDevice.Transform([System.Windows.Point]::new($workingArea.Right, $workingArea.Bottom))
+    $form.Left = $corner.X - $form.Width - 12
+    $form.Top = $corner.Y - $form.Height - 12
+})
+
+function Invoke-ClickFeedback {
+    $animation = [System.Windows.Media.Animation.DoubleAnimation]::new()
+    $animation.From = 1.0
+    $animation.To = 0.97
+    $animation.Duration = [System.Windows.Duration]::new([TimeSpan]::FromMilliseconds(75))
+    $animation.AutoReverse = $true
+    $card.RenderTransform.BeginAnimation([System.Windows.Media.ScaleTransform]::ScaleXProperty, $animation)
+    $card.RenderTransform.BeginAnimation([System.Windows.Media.ScaleTransform]::ScaleYProperty, $animation)
+}
+
+$script:notificationClosing = $false
+$dismissTimer = [System.Windows.Threading.DispatcherTimer]::new()
+$dismissTimer.Interval = [TimeSpan]::FromMilliseconds(160)
+$dismissTimer.Add_Tick({
+    $dismissTimer.Stop()
     if ($focusOnClickEnabled) {
         Focus-VSCodeWindow -PreferredProjectName $projectName -PreferredCwd $cwd
     } else {
         Write-DebugLog "focus skipped: click-to-focus disabled"
     }
-    if (-not $form.IsDisposed) {
-        $form.Close()
-    }
+    $form.Close()
+})
+$closeForm = {
+    if ($script:notificationClosing) { return }
+    $script:notificationClosing = $true
+    Write-DebugLog ("notification clicked project={0} cwd={1}" -f $projectName, $cwd)
+    Invoke-ClickFeedback
+    $dismissTimer.Start()
 }
-
-$form.Add_Click($closeForm)
-$titleLabel.Add_Click($closeForm)
-$messageLabel.Add_Click($closeForm)
+$form.Add_MouseLeftButtonUp($closeForm)
+$form.Add_Closed({ $dismissTimer.Stop() })
 
 if ($soundFile -and (Test-Path $soundFile)) {
     try {
@@ -415,8 +451,7 @@ if ($soundFile -and (Test-Path $soundFile)) {
     } catch {}
 }
 
-[void]$form.Show()
-[System.Windows.Forms.Application]::Run($form)
+[void]$form.ShowDialog()
 """
     env = os.environ.copy()
     env["CODEX_NOTIFY_TITLE"] = title
@@ -435,7 +470,7 @@ if ($soundFile -and (Test-Path $soundFile)) {
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = 0
     subprocess.run(
-        ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
+        ["powershell", "-STA", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
         env=env,
         check=False,
         capture_output=True,

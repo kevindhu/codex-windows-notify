@@ -59,6 +59,8 @@ codex-notify
 - Notifications are shown even if VS Code is closed.
 - The notification body uses the last agent message when available.
 - Notification sound is disabled by default.
+- The selected notification style is **01 - Refined baseline**: a 460 x 156 logical-pixel dark card with 10 px rounded corners, a subtle border, bold Segoe UI title, and muted body text. A small green dot marks completion; amber marks a request for attention. Long text ends with an ellipsis.
+- The popup uses a per-monitor DPI-aware WPF renderer with antialiased text and vector corners. At 125% Windows scaling, the card renders directly at 575 x 195 physical pixels rather than enlarging a low-resolution bitmap.
 - Clicking a notification currently closes it without trying to focus VS Code.
 
 ## Completion Log

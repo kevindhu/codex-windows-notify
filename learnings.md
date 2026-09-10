@@ -1,5 +1,21 @@
 # Learnings
 
+## Notification rendering and DPI
+
+The Python design lookbook rendered cards at high resolution, while the original Windows Forms popup
+ran inside a DPI-unaware PowerShell host. On this machine Windows scaling was 125% (120 DPI), but
+the host reported 96 DPI and DPI awareness 0. Approving the mockup and a 460 x 156 DrawToBitmap
+image did not establish that the actual popup would look smooth at the user's display scale.
+
+The popup now sets DPI awareness before creating its window and uses WPF for antialiased text and
+vector rounded corners. Runtime verification confirmed awareness 2, a 1.25 visual scale, and a
+575 x 195 physical window for the same 460 x 156 logical layout. Verify the actual window's DPI
+and native-size rendering, not just enlarged design mockups. Offscreen exports at other DPI values
+are not a substitute for testing a real monitor at those scales.
+
+Keep UI comparison images and selected-design evidence for the user to review. The retained evidence
+for this change is under `output/notification-styles/rendering-fix/`.
+
 ## What Actually Happened
 
 The project had two separate classes of problems:
