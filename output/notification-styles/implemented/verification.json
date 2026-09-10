@@ -1,0 +1,16 @@
+{
+  "style": "01 - Refined baseline",
+  "method": "Actual Windows Forms rendering with test-only auto-dismiss",
+  "results": [
+    {
+      "case": "completion",
+      "returncode": 0,
+      "render": "C:\\Users\\lemondoo\\PROJECTS\\windows-notify-codex\\output\\notification-styles\\implemented\\completion.png"
+    },
+    {
+      "case": "attention",
+      "returncode": 0,
+      "render": "C:\\Users\\lemondoo\\PROJECTS\\windows-notify-codex\\output\\notification-styles\\implemented\\attention.png"
+    }
+  ]
+}
